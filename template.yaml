@@ -1,0 +1,179 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Serverless REST API with DynamoDB for User Management
+
+Globals:
+  Function:
+    Runtime: python3.9
+    Timeout: 30
+    MemorySize: 256
+    Environment:
+      Variables:
+        USERS_TABLE: !Ref UsersTable
+        POWERTOOLS_SERVICE_NAME: users-api
+    Layers:
+      - !Ref DependenciesLayer
+
+Resources:
+  # DynamoDB Table
+  UsersTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: Users
+      AttributeDefinitions:
+        - AttributeName: userId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: userId
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      Tags:
+        - Key: Project
+          Value: ServerlessUsersAPI
+
+  # Lambda Layer for Dependencies
+  DependenciesLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: users-api-dependencies
+      Description: Dependencies for Users API
+      ContentUri: .
+      CompatibleRuntimes:
+        - python3.9
+      RetentionPolicy: Delete
+    Metadata:
+      BuildMethod: python3.9
+
+  # API Gateway
+  UsersApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: UsersAPI
+      StageName: Prod
+      Cors:
+        AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
+        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+        AllowOrigin: "'*'"
+      TracingEnabled: true
+      MethodSettings:
+        - ResourcePath: '/*'
+          HttpMethod: '*'
+          MetricsEnabled: true
+
+  # Lambda Functions
+
+  # Create User Function
+  CreateUserFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: CreateUser
+      CodeUri: src/
+      Handler: handlers.create_user.lambda_handler
+      Description: Create a new user
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref UsersTable
+      Events:
+        CreateUser:
+          Type: Api
+          Properties:
+            RestApiId: !Ref UsersApi
+            Path: /users
+            Method: POST
+
+  # Get User Function
+  GetUserFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: GetUser
+      CodeUri: src/
+      Handler: handlers.get_user.lambda_handler
+      Description: Get a user by ID
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref UsersTable
+      Events:
+        GetUser:
+          Type: Api
+          Properties:
+            RestApiId: !Ref UsersApi
+            Path: /users/{userId}
+            Method: GET
+
+  # List Users Function
+  ListUsersFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ListUsers
+      CodeUri: src/
+      Handler: handlers.list_users.lambda_handler
+      Description: List all users
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref UsersTable
+      Events:
+        ListUsers:
+          Type: Api
+          Properties:
+            RestApiId: !Ref UsersApi
+            Path: /users
+            Method: GET
+
+  # Update User Function
+  UpdateUserFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: UpdateUser
+      CodeUri: src/
+      Handler: handlers.update_user.lambda_handler
+      Description: Update a user
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref UsersTable
+      Events:
+        UpdateUser:
+          Type: Api
+          Properties:
+            RestApiId: !Ref UsersApi
+            Path: /users/{userId}
+            Method: PUT
+
+  # Delete User Function
+  DeleteUserFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: DeleteUser
+      CodeUri: src/
+      Handler: handlers.delete_user.lambda_handler
+      Description: Delete a user
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref UsersTable
+      Events:
+        DeleteUser:
+          Type: Api
+          Properties:
+            RestApiId: !Ref UsersApi
+            Path: /users/{userId}
+            Method: DELETE
+
+Outputs:
+  ApiEndpoint:
+    Description: API Gateway endpoint URL
+    Value: !Sub 'https://${UsersApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/'
+    Export:
+      Name: !Sub '${AWS::StackName}-ApiEndpoint'
+
+  UsersTableName:
+    Description: DynamoDB table name
+    Value: !Ref UsersTable
+    Export:
+      Name: !Sub '${AWS::StackName}-UsersTable'
+
+  UsersTableArn:
+    Description: DynamoDB table ARN
+    Value: !GetAtt UsersTable.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-UsersTableArn'
