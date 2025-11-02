@@ -42,6 +42,13 @@ packaged.yaml
 # Environment variables
 .env
 .env.local
+.env.production
+
+# API Keys and Secrets (NEVER commit these!)
+api-key.txt
+*.key
+secrets.json
+credentials.json
 
 # Logs
 *.log
