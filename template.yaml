@@ -52,6 +52,8 @@ Resources:
     Properties:
       Name: UsersAPI
       StageName: Prod
+      Auth:
+        ApiKeyRequired: true
       Cors:
         AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
         AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
@@ -61,6 +63,43 @@ Resources:
         - ResourcePath: '/*'
           HttpMethod: '*'
           MetricsEnabled: true
+
+  # API Key and Usage Plan
+  UsersApiKey:
+    Type: AWS::ApiGateway::ApiKey
+    DependsOn:
+      - UsersApiProdStage
+    Properties:
+      Name: UsersAPIKey
+      Description: API Key for Users API
+      Enabled: true
+      StageKeys:
+        - RestApiId: !Ref UsersApi
+          StageName: Prod
+
+  UsersApiUsagePlan:
+    Type: AWS::ApiGateway::UsagePlan
+    DependsOn:
+      - UsersApiProdStage
+    Properties:
+      UsagePlanName: UsersAPIUsagePlan
+      Description: Usage plan for Users API
+      ApiStages:
+        - ApiId: !Ref UsersApi
+          Stage: Prod
+      Throttle:
+        BurstLimit: 200
+        RateLimit: 100
+      Quota:
+        Limit: 10000
+        Period: DAY
+
+  UsersApiUsagePlanKey:
+    Type: AWS::ApiGateway::UsagePlanKey
+    Properties:
+      KeyId: !Ref UsersApiKey
+      KeyType: API_KEY
+      UsagePlanId: !Ref UsersApiUsagePlan
 
   # Lambda Functions
 
@@ -82,6 +121,8 @@ Resources:
             RestApiId: !Ref UsersApi
             Path: /users
             Method: POST
+            Auth:
+              ApiKeyRequired: true
 
   # Get User Function
   GetUserFunction:
@@ -101,6 +142,8 @@ Resources:
             RestApiId: !Ref UsersApi
             Path: /users/{userId}
             Method: GET
+            Auth:
+              ApiKeyRequired: true
 
   # List Users Function
   ListUsersFunction:
@@ -120,6 +163,8 @@ Resources:
             RestApiId: !Ref UsersApi
             Path: /users
             Method: GET
+            Auth:
+              ApiKeyRequired: true
 
   # Update User Function
   UpdateUserFunction:
@@ -139,6 +184,8 @@ Resources:
             RestApiId: !Ref UsersApi
             Path: /users/{userId}
             Method: PUT
+            Auth:
+              ApiKeyRequired: true
 
   # Delete User Function
   DeleteUserFunction:
@@ -158,6 +205,8 @@ Resources:
             RestApiId: !Ref UsersApi
             Path: /users/{userId}
             Method: DELETE
+            Auth:
+              ApiKeyRequired: true
 
 Outputs:
   ApiEndpoint:
@@ -177,3 +226,9 @@ Outputs:
     Value: !GetAtt UsersTable.Arn
     Export:
       Name: !Sub '${AWS::StackName}-UsersTableArn'
+
+  ApiKeyId:
+    Description: API Key ID (use AWS CLI to get the actual key value)
+    Value: !Ref UsersApiKey
+    Export:
+      Name: !Sub '${AWS::StackName}-ApiKeyId'
